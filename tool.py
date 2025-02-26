@@ -192,8 +192,8 @@ class LabelingTool(tk.Tk):
     def _setup_shortcuts(self):
         self.bind_all("<KeyPress-m>", self._shortcut_male, add="+")
         self.bind_all("<KeyPress-f>", self._shortcut_female, add="+")
-        self.bind_all("<KeyPress-s>", self._shortcut_save_next, add="+")
-        self.bind_all("<KeyPress-S>", self._shortcut_save_next, add="+")
+        self.bind_all("<KeyPress-n>", self._shortcut_save_next, add="+")
+        self.bind_all("<KeyPress-N>", self._shortcut_save_next, add="+")
         self.bind_all("<KeyPress-p>", self._shortcut_prev, add="+")
         self.bind_all("<KeyPress-i>", self._shortcut_skip, add="+")
         self.bind_all("<KeyPress-a>", self._shortcut_focus_age, add="+")
@@ -233,7 +233,7 @@ class LabelingTool(tk.Tk):
             "m = male\n"
             "f = female\n"
             "a = focus age\n"
-            "s = save & next\n"
+            "n = save & next\n"
             "p = previous\n"
             "i = skip\n"
             "h = help"
