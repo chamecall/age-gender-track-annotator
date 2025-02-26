@@ -2,7 +2,7 @@ import os
 import csv
 import platform
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
 
@@ -61,7 +61,7 @@ class LabelingTool(tk.Tk):
 
         # Title label
         self.title_label = ttk.Label(
-            self.top_frame, text="", font=("Arial", 14, "bold")
+            self.top_frame, text="", font=("Arial", 30, "bold")
         )
         self.title_label.pack(side=tk.TOP, anchor="w", pady=(0, 5))
 
@@ -70,7 +70,9 @@ class LabelingTool(tk.Tk):
         self.nav_frame.pack(fill=tk.X)
 
         # PROGRESS BAR (Canvas)
-        self.progress_canvas = tk.Canvas(self.nav_frame, height=30, bg="white")
+        self.progress_canvas = tk.Canvas(
+            self.nav_frame, height=30, bg="white", bd=0, highlightthickness=0
+        )
         self.progress_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.progress_canvas.bind("<Button-1>", self._on_progress_click)
         self.progress_canvas.bind("<Configure>", self._on_progress_canvas_configure)
@@ -85,7 +87,7 @@ class LabelingTool(tk.Tk):
         self.goto_spin = ttk.Spinbox(
             self.goto_frame,
             from_=1,
-            to=self.n_tracks,
+            to=self.n_tracks if self.n_tracks > 0 else 1,  # avoid an error if no tracks
             textvariable=self.goto_var,
             width=5,
         )
@@ -294,7 +296,10 @@ class LabelingTool(tk.Tk):
         self.original_images.clear()
 
         if not (0 <= self.current_track_index < self.n_tracks):
-            messagebox.showinfo("Info", "Out of track range.")
+            # No tracks, or out of range
+            self.title_label.config(
+                text="No Tracks Found" if self.n_tracks == 0 else "Out of range"
+            )
             return
 
         camera_id, track_id, img_paths = self.tracks[self.current_track_index]
@@ -322,8 +327,11 @@ class LabelingTool(tk.Tk):
 
         # Create placeholders
         for pil_img in self.original_images:
+            # Optionally, use "from PIL import ImageResampling" for LANCZOS
             thumb = pil_img.copy()
-            thumb.thumbnail((200, 200), Image.Resampling.LANCZOS)
+            thumb.thumbnail(
+                (200, 200), Image.Resampling.LANCZOS
+            )  # or Image.Resampling.LANCZOS
             imgtk = ImageTk.PhotoImage(thumb)
             lbl = ttk.Label(self.images_frame, image=imgtk)
             lbl.image = imgtk
@@ -376,7 +384,6 @@ class LabelingTool(tk.Tk):
                 col = 0
                 row += 1
 
-        # total height
         total_height = 0
         i = 0
         row_heights = []
@@ -424,12 +431,6 @@ class LabelingTool(tk.Tk):
     #  PROGRESS BAR
     # ==========================
     def _draw_progress_bar(self):
-        """
-        Distribute rectangles evenly across the entire width of the canvas
-        with NO spacing between them.
-        Each track is a rectangle: green = labeled, gray = unlabeled,
-        red outline for current track.
-        """
         self.progress_canvas.delete("all")
         self.track_rects.clear()
 
@@ -438,16 +439,12 @@ class LabelingTool(tk.Tk):
 
         canvas_width = self.progress_canvas.winfo_width()
         canvas_height = int(self.progress_canvas.winfo_height())
-        rect_height = canvas_height - 10  # top/bottom margin
+        rect_height = canvas_height - 10
         if rect_height < 1:
             rect_height = 1
 
-        # No spacing
         y1 = 5
         y2 = y1 + rect_height
-
-        if self.n_tracks <= 0:
-            return
 
         rect_width = canvas_width / self.n_tracks
 
@@ -466,10 +463,9 @@ class LabelingTool(tk.Tk):
                 x2,
                 y2,
                 fill=fill_color,
-                outline="black",
+                outline=fill_color,  # same color => no visible boundary
                 width=0,
             )
-            # highlight current track
             if i == self.current_track_index:
                 self.progress_canvas.itemconfig(rect_id, outline="red", width=2)
 
@@ -490,10 +486,7 @@ class LabelingTool(tk.Tk):
     #  "Go to Track" method
     # ==========================
     def _goto_track(self):
-        """
-        Jump to the track index the user entered in the spinbox (1-based).
-        """
-        idx = self.goto_var.get() - 1  # spinbox is 1-based
+        idx = self.goto_var.get() - 1
         if 0 <= idx < self.n_tracks:
             self.current_track_index = idx
             self.display_current_track()
@@ -560,9 +553,24 @@ class LabelingTool(tk.Tk):
 
 
 def main():
-    root_folder = "data"  # Adjust as needed
+    """
+    At startup, show a file dialog so user can choose the data folder.
+    If canceled, exit the program.
+    """
+    # 1) Create a minimal hidden root just to show the dialog
+    root = tk.Tk()
+    root.withdraw()
+
+    folder = filedialog.askdirectory(title="Select the data directory")
+    if not folder:
+        # user canceled
+        return
+
+    # 2) We can now destroy that minimal root and create our main app
+    root.destroy()
+
     output_csv = "labels.csv"
-    app = LabelingTool(root_folder, output_csv)
+    app = LabelingTool(folder, output_csv)
     app.mainloop()
 
 
