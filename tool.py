@@ -361,6 +361,20 @@ class LabelingTool(tk.Tk):
         for path in img_paths:
             try:
                 pil_img = Image.open(path)
+                # Parse the crop info from the file name
+                basename = os.path.basename(path)
+                parts = basename.split("_")
+                if len(parts) >= 6:
+                    try:
+                        # Remove file extension from the last part if present
+                        parts[-1] = os.path.splitext(parts[-1])[0]
+                        left = float(parts[-4])
+                        top = float(parts[-3])
+                        right = float(parts[-2])
+                        bottom = float(parts[-1])
+                        pil_img = pil_img.crop((left, top, right, bottom))
+                    except Exception as e:
+                        print(f"Error cropping image {basename}: {e}")
                 self.original_images.append(pil_img)
                 self.image_paths.append(path)  # Store file path
             except Exception as e:
@@ -609,7 +623,8 @@ class LabelingTool(tk.Tk):
         for (cam, tid), (gender, age_str) in self.labeled_data.items():
             try:
                 age_val = float(age_str)
-                ages.append(age_val)
+                if 0 < age_val < 101:
+                    ages.append(age_val)
             except ValueError:
                 continue
             if gender in gender_counts:
