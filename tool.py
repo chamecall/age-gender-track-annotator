@@ -128,6 +128,12 @@ class LabelingTool(tk.Tk):
         self.bottom_frame = ttk.Frame(self)
         self.bottom_frame.pack(fill=tk.X, pady=5)
 
+        # show distribution
+        self.distribution_button = ttk.Button(
+            self.bottom_frame, text="Show Distribution", command=self.show_distribution
+        )
+        self.distribution_button.pack(side=tk.RIGHT, padx=5)
+
         # Gender
         ttk.Label(self.bottom_frame, text="Gender:").pack(side=tk.LEFT, padx=(10, 2))
         self.gender_var = tk.StringVar(value="")
@@ -543,6 +549,43 @@ class LabelingTool(tk.Tk):
             writer.writerow(["camera_id", "track_id", "gender", "age"])
             for (c, t), (g, a) in self.labeled_data.items():
                 writer.writerow([c, t, g, a])
+
+    def show_distribution(self):
+        import matplotlib.pyplot as plt
+
+        # Collect data from labeled tracks
+        ages = []
+        gender_counts = {"male": 0, "female": 0}
+        for (cam, tid), (gender, age_str) in self.labeled_data.items():
+            try:
+                age_val = float(age_str)
+                ages.append(age_val)
+            except ValueError:
+                continue
+            if gender in gender_counts:
+                gender_counts[gender] += 1
+
+        if not ages:
+            messagebox.showinfo("Info", "No labeled data available for plotting.")
+            return
+
+        # Create the plots
+        fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+
+        # Age distribution (histogram)
+        axs[0].hist(ages, bins=range(int(min(ages)), int(max(ages)) + 2))
+        axs[0].set_title("Age Distribution")
+        axs[0].set_xlabel("Age")
+        axs[0].set_ylabel("Count")
+
+        # Gender distribution (bar chart)
+        axs[1].bar(gender_counts.keys(), gender_counts.values())
+        axs[1].set_title("Gender Distribution")
+        axs[1].set_xlabel("Gender")
+        axs[1].set_ylabel("Count")
+
+        plt.tight_layout()
+        plt.show()
 
 
 def main():
