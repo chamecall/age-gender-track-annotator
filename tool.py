@@ -539,10 +539,17 @@ class LabelingTool(tk.Tk):
     # ==========================
     #  SAVE BUTTON STATE
     # ==========================
+
     def _update_save_button_state(self, *args):
         gender_chosen = self.gender_var.get().strip() != ""
-        age_filled = self.age_var.get().strip() != ""
-        if gender_chosen and age_filled:
+        age_str = self.age_var.get().strip()
+        try:
+            age_val = float(age_str)
+            age_valid = age_val > 0 and age_val < 101
+        except ValueError:
+            age_valid = False
+
+        if gender_chosen and age_valid:
             self.save_next_button["state"] = "normal"
             self.save_next_button.configure(style="Green.TButton")
         else:
