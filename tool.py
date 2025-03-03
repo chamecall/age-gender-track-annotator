@@ -207,6 +207,37 @@ class LabelingTool(tk.Tk):
 
         # Ctrl+A => select all in age field
         self.age_entry.bind("<Control-a>", self._select_all_in_age, add="+")
+        self.bind("<Delete>", self._delete_selected_images)
+
+    def _delete_selected_images(self, event):
+        # Get the indices of selected images
+        indices_to_remove = [
+            i
+            for i, lbl in enumerate(self.img_labels)
+            if getattr(lbl, "selected", False)
+        ]
+        if not indices_to_remove:
+            return
+
+        # Remove images in reverse order so that indexes remain valid
+        for index in sorted(indices_to_remove, reverse=True):
+            # Get the file path from the stored list or the label attribute
+            file_path = self.image_paths[index]
+            try:
+                os.remove(file_path)
+                print(f"Deleted file: {file_path}")
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
+
+            # Remove from the image lists and destroy the widget
+            del self.original_images[index]
+            del self.image_paths[index]
+            lbl = self.img_labels.pop(index)
+            lbl.destroy()
+            del self.img_tks[index]
+
+        # Reflow the remaining images on the canvas
+        self._flow_images()
 
     def _shortcut_male(self, event):
         self.gender_var.set("male")
@@ -323,24 +354,28 @@ class LabelingTool(tk.Tk):
             self.gender_var.set("")
             self.age_var.set("")
 
-        # Load images
+        # Initialize a list to store file paths
+        self.image_paths = []
+
+        # Load images and store their paths
         for path in img_paths:
             try:
                 pil_img = Image.open(path)
                 self.original_images.append(pil_img)
+                self.image_paths.append(path)  # Store file path
             except Exception as e:
                 print(f"Warning: could not open {path}: {e}")
 
-        # Create placeholders
-        for pil_img in self.original_images:
-            # Optionally, use "from PIL import ImageResampling" for LANCZOS
+        # Create placeholders and attach file path to each label
+        for i, pil_img in enumerate(self.original_images):
             thumb = pil_img.copy()
-            thumb.thumbnail(
-                (200, 200), Image.Resampling.LANCZOS
-            )  # or Image.Resampling.LANCZOS
+            thumb.thumbnail((200, 200), Image.Resampling.LANCZOS)
             imgtk = ImageTk.PhotoImage(thumb)
             lbl = ttk.Label(self.images_frame, image=imgtk)
             lbl.image = imgtk
+            lbl.selected = False  # custom attribute for selection state
+            lbl.file_path = self.image_paths[i]  # attach file path to label
+            lbl.bind("<Button-1>", self._on_image_click)
             lbl.pack()
             self.img_labels.append(lbl)
             self.img_tks.append(imgtk)
@@ -350,6 +385,14 @@ class LabelingTool(tk.Tk):
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
         self._update_save_button_state()
         self._draw_progress_bar()
+
+    def _on_image_click(self, event):
+        lbl = event.widget
+        lbl.selected = not getattr(lbl, "selected", False)
+        if lbl.selected:
+            lbl.config(borderwidth=5, relief="solid")
+        else:
+            lbl.config(borderwidth=0, relief="flat")
 
     def _flow_images(self):
         for lbl in self.img_labels:
