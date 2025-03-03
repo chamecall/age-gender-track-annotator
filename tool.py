@@ -439,10 +439,7 @@ class LabelingTool(tk.Tk):
 
         canvas_width = self.progress_canvas.winfo_width()
         canvas_height = int(self.progress_canvas.winfo_height())
-        rect_height = canvas_height - 10
-        if rect_height < 1:
-            rect_height = 1
-
+        rect_height = max(canvas_height - 10, 1)
         y1 = 5
         y2 = y1 + rect_height
 
@@ -451,20 +448,17 @@ class LabelingTool(tk.Tk):
         for i, (cam, tid, _) in enumerate(self.tracks):
             x1 = int(i * rect_width)
             x2 = int((i + 1) * rect_width)
-
             if (cam, tid) in self.labeled_data:
-                fill_color = "green"
+                gender, age = self.labeled_data[(cam, tid)]
+                if str(age) == "-1":
+                    fill_color = "yellow"
+                else:
+                    fill_color = "green"
             else:
                 fill_color = "black"
 
             rect_id = self.progress_canvas.create_rectangle(
-                x1,
-                y1,
-                x2,
-                y2,
-                fill=fill_color,
-                outline=fill_color,  # same color => no visible boundary
-                width=0,
+                x1, y1, x2, y2, fill=fill_color, outline=fill_color, width=0
             )
             if i == self.current_track_index:
                 self.progress_canvas.itemconfig(rect_id, outline="red", width=2)
@@ -509,7 +503,12 @@ class LabelingTool(tk.Tk):
     # ==========================
     #  NAVIGATION
     # ==========================
+
     def skip_track(self):
+        camera_id, track_id, _ = self.tracks[self.current_track_index]
+        if (camera_id, track_id) not in self.labeled_data:
+            # Save as skipped using default values (e.g., age=-1)
+            self._save_label(camera_id, track_id, "", -1)
         self.current_track_index += 1
         if self.current_track_index < self.n_tracks:
             self.display_current_track()
