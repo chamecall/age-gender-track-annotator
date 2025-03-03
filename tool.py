@@ -512,9 +512,6 @@ class LabelingTool(tk.Tk):
         self.current_track_index += 1
         if self.current_track_index < self.n_tracks:
             self.display_current_track()
-        else:
-            messagebox.showinfo("Done", "Reached the end (skipped).")
-            self.destroy()
 
     def save_and_next(self):
         if not (0 <= self.current_track_index < self.n_tracks):
@@ -530,9 +527,6 @@ class LabelingTool(tk.Tk):
         self.current_track_index += 1
         if self.current_track_index < self.n_tracks:
             self.display_current_track()
-        else:
-            messagebox.showinfo("Done", "All tracks labeled or skipped.")
-            self.destroy()
 
     def prev_track(self):
         self.current_track_index -= 1
