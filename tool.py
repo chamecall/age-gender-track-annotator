@@ -2,6 +2,7 @@ import os
 import csv
 import platform
 import shutil
+import subprocess  # needed for clipboard copying via xclip
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
@@ -213,14 +214,13 @@ class LabelingTool(tk.Tk):
         self.bind_all("<KeyPress-h>", self._shortcut_help, add="+")
         self.bind_all(
             "<Control-d>", self._shortcut_remove_track, add="+"
-        )  # <<-- New shortcut
+        )  # New shortcut
 
         # Ctrl+A => select all in age field
         self.age_entry.bind("<Control-a>", self._select_all_in_age, add="+")
         self.bind("<Delete>", self._delete_selected_images)
 
     def _delete_selected_images(self, event):
-        # Get the indices of selected images
         indices_to_remove = [
             i
             for i, lbl in enumerate(self.img_labels)
@@ -229,9 +229,7 @@ class LabelingTool(tk.Tk):
         if not indices_to_remove:
             return
 
-        # Remove images in reverse order so that indexes remain valid
         for index in sorted(indices_to_remove, reverse=True):
-            # Get the file path from the stored list or the label attribute
             file_path = self.image_paths[index]
             try:
                 os.remove(file_path)
@@ -239,14 +237,12 @@ class LabelingTool(tk.Tk):
             except Exception as e:
                 print(f"Error deleting file {file_path}: {e}")
 
-            # Remove from the image lists and destroy the widget
             del self.original_images[index]
             del self.image_paths[index]
             lbl = self.img_labels.pop(index)
             lbl.destroy()
             del self.img_tks[index]
 
-        # Reflow the remaining images on the canvas
         self._flow_images()
 
     def _shortcut_male(self, event):
@@ -299,7 +295,6 @@ class LabelingTool(tk.Tk):
             return
 
         camera_id, track_id, _ = self.tracks[self.current_track_index]
-        # Build the full track directory path (assuming structure: root_folder/camera_id/track_id)
         track_dir = os.path.join(self.root_folder, camera_id, track_id)
         try:
             shutil.rmtree(track_dir)
@@ -310,11 +305,9 @@ class LabelingTool(tk.Tk):
             )
             return
 
-        # Remove the track from the internal list and update count
         del self.tracks[self.current_track_index]
         self.n_tracks = len(self.tracks)
 
-        # Also remove its label from the saved labels (if any) and update CSV
         if (camera_id, track_id) in self.labeled_data:
             del self.labeled_data[(camera_id, track_id)]
             with open(self.output_csv, "w", newline="", encoding="utf-8") as f:
@@ -323,7 +316,6 @@ class LabelingTool(tk.Tk):
                 for (c, t), (g, a) in self.labeled_data.items():
                     writer.writerow([c, t, g, a])
 
-        # Adjust current_track_index if needed: if removed last track, move index one back.
         if self.current_track_index >= self.n_tracks:
             self.current_track_index = self.n_tracks - 1
 
@@ -333,6 +325,33 @@ class LabelingTool(tk.Tk):
         event.widget.select_range(0, "end")
         event.widget.icursor("end")
         return "break"
+
+    # ------------------------------
+    # New: Copy Image to Clipboard
+    # ------------------------------
+    def copy_image_to_clipboard(self, image_path):
+        """
+        Uses xclip to copy the image at image_path to the clipboard.
+        Assumes the image is in PNG format (or a compatible format).
+        """
+        try:
+            subprocess.run(
+                [
+                    "xclip",
+                    "-selection",
+                    "clipboard",
+                    "-t",
+                    "image/png",
+                    "-i",
+                    image_path,
+                ],
+                check=True,
+            )
+            print(f"Copied {image_path} to clipboard.")
+        except subprocess.CalledProcessError as e:
+            messagebox.showerror(
+                "Clipboard Error", f"Failed to copy image to clipboard.\n{e}"
+            )
 
     # ==========================
     #   DATA LOADING
@@ -376,9 +395,7 @@ class LabelingTool(tk.Tk):
     #   DISPLAY / LAYOUT
     # ==========================
     def display_current_track(self):
-        # Update the spinbox range
         self.goto_spin.config(to=self.n_tracks if self.n_tracks > 0 else 1)
-        # Clear old
         for lbl in self.img_labels:
             lbl.destroy()
         self.img_labels.clear()
@@ -386,7 +403,6 @@ class LabelingTool(tk.Tk):
         self.original_images.clear()
 
         if not (0 <= self.current_track_index < self.n_tracks):
-            # No tracks, or out of range
             self.title_label.config(
                 text="No Tracks Found" if self.n_tracks == 0 else "Out of range"
             )
@@ -407,19 +423,15 @@ class LabelingTool(tk.Tk):
             self.gender_var.set("")
             self.age_var.set("")
 
-        # Initialize a list to store file paths
         self.image_paths = []
 
-        # Load images and store their paths
         for path in img_paths:
             try:
                 pil_img = Image.open(path)
-                # Parse the crop info from the file name
                 basename = os.path.basename(path)
                 parts = basename.split("_")
                 if len(parts) >= 6:
                     try:
-                        # Remove file extension from the last part if present
                         parts[-1] = os.path.splitext(parts[-1])[0]
                         left = float(parts[-4])
                         top = float(parts[-3])
@@ -429,7 +441,7 @@ class LabelingTool(tk.Tk):
                     except Exception as e:
                         print(f"Error cropping image {basename}: {e}")
                 self.original_images.append(pil_img)
-                self.image_paths.append(path)  # Store file path
+                self.image_paths.append(path)
             except Exception as e:
                 print(f"Warning: could not open {path}: {e}")
 
@@ -440,8 +452,9 @@ class LabelingTool(tk.Tk):
             imgtk = ImageTk.PhotoImage(thumb)
             lbl = ttk.Label(self.images_frame, image=imgtk)
             lbl.image = imgtk
-            lbl.selected = False  # custom attribute for selection state
-            lbl.file_path = self.image_paths[i]  # attach file path to label
+            lbl.selected = False
+            lbl.file_path = self.image_paths[i]
+            # Modified: Bind image click to toggle selection and copy image to clipboard
             lbl.bind("<Button-1>", self._on_image_click)
             lbl.pack()
             self.img_labels.append(lbl)
@@ -458,6 +471,8 @@ class LabelingTool(tk.Tk):
         lbl.selected = not getattr(lbl, "selected", False)
         if lbl.selected:
             lbl.config(borderwidth=5, relief="solid")
+            # Copy the image (using its file path) to the clipboard
+            self.copy_image_to_clipboard(lbl.file_path)
         else:
             lbl.config(borderwidth=0, relief="flat")
 
@@ -546,6 +561,7 @@ class LabelingTool(tk.Tk):
     # ==========================
     #  PROGRESS BAR
     # ==========================
+
     def _draw_progress_bar(self):
         self.progress_canvas.delete("all")
         self.track_rects.clear()
@@ -566,10 +582,14 @@ class LabelingTool(tk.Tk):
             x2 = int((i + 1) * rect_width)
             if (cam, tid) in self.labeled_data:
                 gender, age = self.labeled_data[(cam, tid)]
-                if str(age) == "-1":
-                    fill_color = "yellow"
-                else:
-                    fill_color = "green"
+                try:
+                    # Convert age to float and check if it's -1 (skipped)
+                    if float(age) == -1:
+                        fill_color = "yellow"
+                    else:
+                        fill_color = "green"
+                except ValueError:
+                    fill_color = "black"
             else:
                 fill_color = "black"
 
@@ -606,23 +626,21 @@ class LabelingTool(tk.Tk):
     # ==========================
     #  SAVE BUTTON STATE
     # ==========================
-
     def _update_save_button_state(self, *args):
         age_str = self.age_var.get().strip()
-        # Allow save & next if the track is marked as skipped (age = -1)
-        if age_str == "-1":
+        try:
+            age_val = float(age_str)
+        except ValueError:
+            age_val = None
+
+        # Allow save & next if the track is marked as skipped (age == -1)
+        if age_val is not None and age_val == -1:
             self.save_next_button["state"] = "normal"
             self.save_next_button.configure(style="Green.TButton")
             return
 
         gender_chosen = self.gender_var.get().strip() != ""
-        try:
-            age_val = float(age_str)
-            age_valid = age_val > 0 and age_val < 101
-        except ValueError:
-            age_valid = False
-
-        if gender_chosen and age_valid:
+        if age_val is not None and age_val > 0 and age_val < 101 and gender_chosen:
             self.save_next_button["state"] = "normal"
             self.save_next_button.configure(style="Green.TButton")
         else:
@@ -632,11 +650,8 @@ class LabelingTool(tk.Tk):
     # ==========================
     #  NAVIGATION
     # ==========================
-
     def skip_track(self):
         camera_id, track_id, _ = self.tracks[self.current_track_index]
-        # if (camera_id, track_id) not in self.labeled_data:
-        # Save as skipped using default values (e.g., age=-1)
         self._save_label(camera_id, track_id, "", -1)
         self.current_track_index += 1
         if self.current_track_index < self.n_tracks:
@@ -666,7 +681,6 @@ class LabelingTool(tk.Tk):
             self.current_track_index = 0
 
     def _save_label(self, cam, tid, gender, age):
-        # Ensure that a skipped track (age == -1) is stored as "-1"
         if isinstance(age, (int, float)) and float(age) == -1:
             age_str = "-1"
         else:
@@ -681,7 +695,6 @@ class LabelingTool(tk.Tk):
     def show_distribution(self):
         import matplotlib.pyplot as plt
 
-        # Collect data from labeled tracks
         ages = []
         gender_counts = {"male": 0, "female": 0}
         for (cam, tid), (gender, age_str) in self.labeled_data.items():
@@ -698,16 +711,12 @@ class LabelingTool(tk.Tk):
             messagebox.showinfo("Info", "No labeled data available for plotting.")
             return
 
-        # Create the plots
         fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-
-        # Age distribution (histogram)
         axs[0].hist(ages, bins=range(int(min(ages)), int(max(ages)) + 2))
         axs[0].set_title("Age Distribution")
         axs[0].set_xlabel("Age")
         axs[0].set_ylabel("Count")
 
-        # Gender distribution (bar chart)
         axs[1].bar(gender_counts.keys(), gender_counts.values())
         axs[1].set_title("Gender Distribution")
         axs[1].set_xlabel("Gender")
@@ -718,20 +727,13 @@ class LabelingTool(tk.Tk):
 
 
 def main():
-    """
-    At startup, show a file dialog so user can choose the data folder.
-    If canceled, exit the program.
-    """
-    # 1) Create a minimal hidden root just to show the dialog
     root = tk.Tk()
     root.withdraw()
 
     folder = filedialog.askdirectory(title="Select the data directory")
     if not folder:
-        # user canceled
         return
 
-    # 2) We can now destroy that minimal root and create our main app
     root.destroy()
 
     output_csv = "labels.csv"
