@@ -629,9 +629,9 @@ class LabelingTool(tk.Tk):
 
     def skip_track(self):
         camera_id, track_id, _ = self.tracks[self.current_track_index]
-        if (camera_id, track_id) not in self.labeled_data:
-            # Save as skipped using default values (e.g., age=-1)
-            self._save_label(camera_id, track_id, "", -1)
+        # if (camera_id, track_id) not in self.labeled_data:
+        # Save as skipped using default values (e.g., age=-1)
+        self._save_label(camera_id, track_id, "", -1)
         self.current_track_index += 1
         if self.current_track_index < self.n_tracks:
             self.display_current_track()
