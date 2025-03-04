@@ -608,8 +608,14 @@ class LabelingTool(tk.Tk):
     # ==========================
 
     def _update_save_button_state(self, *args):
-        gender_chosen = self.gender_var.get().strip() != ""
         age_str = self.age_var.get().strip()
+        # Allow save & next if the track is marked as skipped (age = -1)
+        if age_str == "-1":
+            self.save_next_button["state"] = "normal"
+            self.save_next_button.configure(style="Green.TButton")
+            return
+
+        gender_chosen = self.gender_var.get().strip() != ""
         try:
             age_val = float(age_str)
             age_valid = age_val > 0 and age_val < 101
@@ -660,7 +666,12 @@ class LabelingTool(tk.Tk):
             self.current_track_index = 0
 
     def _save_label(self, cam, tid, gender, age):
-        self.labeled_data[(cam, tid)] = (gender, str(age))
+        # Ensure that a skipped track (age == -1) is stored as "-1"
+        if isinstance(age, (int, float)) and float(age) == -1:
+            age_str = "-1"
+        else:
+            age_str = str(age)
+        self.labeled_data[(cam, tid)] = (gender, age_str)
         with open(self.output_csv, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["camera_id", "track_id", "gender", "age"])
