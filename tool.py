@@ -1,6 +1,7 @@
 import os
 import csv
 import platform
+import shutil
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
@@ -125,10 +126,16 @@ class LabelingTool(tk.Tk):
         # =============================
         #   BOTTOM FRAME: gender/age + nav
         # =============================
+
         self.bottom_frame = ttk.Frame(self)
         self.bottom_frame.pack(fill=tk.X, pady=5)
 
-        # show distribution
+        # New "Remove Track" Button (placed near "Show Distribution")
+        self.remove_button = ttk.Button(
+            self.bottom_frame, text="Remove Track", command=self.remove_current_track
+        )
+        self.remove_button.pack(side=tk.RIGHT, padx=5)
+
         self.distribution_button = ttk.Button(
             self.bottom_frame, text="Show Distribution", command=self.show_distribution
         )
@@ -204,6 +211,9 @@ class LabelingTool(tk.Tk):
         self.bind_all("<KeyPress-i>", self._shortcut_skip, add="+")
         self.bind_all("<KeyPress-a>", self._shortcut_focus_age, add="+")
         self.bind_all("<KeyPress-h>", self._shortcut_help, add="+")
+        self.bind_all(
+            "<Control-d>", self._shortcut_remove_track, add="+"
+        )  # <<-- New shortcut
 
         # Ctrl+A => select all in age field
         self.age_entry.bind("<Control-a>", self._select_all_in_age, add="+")
@@ -273,10 +283,51 @@ class LabelingTool(tk.Tk):
             "n = save & next\n"
             "p = previous\n"
             "i = skip\n"
+            "ctrl+d = remove whole track\n"
             "h = help"
         )
         messagebox.showinfo("Shortcuts", msg)
         return "break"
+
+    def _shortcut_remove_track(self, event):
+        self.remove_current_track()
+        return "break"
+
+    def remove_current_track(self):
+        """Removes the current track from disk and the internal list."""
+        if not (0 <= self.current_track_index < self.n_tracks):
+            return
+
+        camera_id, track_id, _ = self.tracks[self.current_track_index]
+        # Build the full track directory path (assuming structure: root_folder/camera_id/track_id)
+        track_dir = os.path.join(self.root_folder, camera_id, track_id)
+        try:
+            shutil.rmtree(track_dir)
+            print(f"Deleted track directory: {track_dir}")
+        except Exception as e:
+            messagebox.showerror(
+                "Error", f"Failed to delete track directory:\n{track_dir}\n{str(e)}"
+            )
+            return
+
+        # Remove the track from the internal list and update count
+        del self.tracks[self.current_track_index]
+        self.n_tracks = len(self.tracks)
+
+        # Also remove its label from the saved labels (if any) and update CSV
+        if (camera_id, track_id) in self.labeled_data:
+            del self.labeled_data[(camera_id, track_id)]
+            with open(self.output_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["camera_id", "track_id", "gender", "age"])
+                for (c, t), (g, a) in self.labeled_data.items():
+                    writer.writerow([c, t, g, a])
+
+        # Adjust current_track_index if needed: if removed last track, move index one back.
+        if self.current_track_index >= self.n_tracks:
+            self.current_track_index = self.n_tracks - 1
+
+        self.display_current_track()
 
     def _select_all_in_age(self, event):
         event.widget.select_range(0, "end")
@@ -325,6 +376,8 @@ class LabelingTool(tk.Tk):
     #   DISPLAY / LAYOUT
     # ==========================
     def display_current_track(self):
+        # Update the spinbox range
+        self.goto_spin.config(to=self.n_tracks if self.n_tracks > 0 else 1)
         # Clear old
         for lbl in self.img_labels:
             lbl.destroy()
